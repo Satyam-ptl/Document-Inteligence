@@ -1,0 +1,57 @@
+# Runtime and test dependencies for the backend.
+#
+# Optional heavyweight BGE-M3/reranker dependencies are in
+# ../requirements-ml.txt. The application intentionally falls back to local
+# hashing embeddings when those packages or model weights are unavailable.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.13  # Phase 11: Postgres driver for docker-compose's `postgres` service (SQLite is dev/test-only). Verified on live PyPI 2026-09-26.
+python-dotenv==1.0.1
+loguru==0.7.3
+openpyxl==3.1.5
+python-docx==1.1.2
+
+# Phase 2: normal (text-layer) PDF extraction
+# Verified against live PyPI on 2026-09-26 (`pip index versions pymupdf`):
+# latest is 1.28.2, installed and tested successfully in this session.
+pymupdf==1.28.2
+
+# Phase 3: scanned-PDF / image OCR via PaddleOCR-VL-1.6
+# Verified installable from live PyPI on 2026-09-26 (no custom index needed —
+# the paddlepaddle.org.cn index in PROJECT_STATE.md's original install notes
+# is only required for GPU/CUDA builds; the CPU wheel is on PyPI directly).
+opencv-python-headless==5.0.0.93
+paddlepaddle==3.3.1
+paddleocr[doc-parser]==3.7.0
+numpy==2.3.5  # pinned <2.4 — paddlex (a paddleocr dependency) requires numpy<2.4,>=1.24
+
+# Dense embeddings + Qdrant vector indexing.
+# `qdrant-client` verified installed & genuinely exercised end-to-end in this
+# sandbox (its embedded/local mode needs no server, no Docker, no network —
+# see app/retrieval/qdrant_store.py). `FlagEmbedding`'s real API shape was
+# confirmed by reading its source (via `pip download --no-deps`, no install
+# needed for that), but FlagEmbedding itself, and the `torch` it depends on,
+# could NOT be installed in this sandbox: `pip install torch` alone failed
+# with "No space left on device" (torch + its bundled NVIDIA CUDA libraries
+# need >10 GB; this sandbox had only a few GB free) — a disk-space
+# limitation, not a code problem, reproduced directly this session. Uncomment
+# and install these in an environment with enough disk (and open network —
+# huggingface.co is also required to actually download the bge-m3 weights,
+# same gap Phase 3 hit for PaddleOCR-VL):
+qdrant-client==1.19.1
+# Install ../requirements-ml.txt for the real BGE-M3 model.
+
+# Hybrid retrieval/reranking uses the same optional BGE-M3 installation.
+
+# LLM generation uses provider REST APIs through httpx; no provider SDK is
+# required.
+
+# Dev / test
+pytest==8.3.4
+pytest-cov==6.0.0
+httpx==0.28.1  # Phase 1-5: FastAPI TestClient. Phase 6+: also the real LLM HTTP client.

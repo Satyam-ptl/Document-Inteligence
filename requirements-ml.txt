@@ -1,0 +1,7 @@
+# Optional heavyweight model dependencies.
+#
+# The base backend requirements intentionally use the local hashing embedding
+# fallback when these packages are unavailable. Install this file when you
+# want BGE-M3 embeddings and BGE reranking instead of the fallback.
+FlagEmbedding==1.4.2
+torch
