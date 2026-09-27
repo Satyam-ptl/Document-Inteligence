@@ -1,5 +1,4 @@
-GET /api/documents?limit=50&offset=0GET /api/documents?limit=50&offset=0/api/health
-/api/ready# Document Intelligence & Multi-Source Search Platform
+# Document Intelligence & Multi-Source Search Platform
 
 > **Status (updated Phase 12): Phases 1–12 implemented. Backend logic —
 > ingestion, chunking, OCR block-labeling, hybrid retrieval fusion,
@@ -23,7 +22,8 @@ GET /api/documents?limit=50&offset=0GET /api/documents?limit=50&offset=0/api/hea
 > See [`PROJECT_STATE.md`](./PROJECT_STATE.md) for exactly what's built,
 > what's verified, and how to resume this project in a new session if
 > needed. This README is filled in incrementally as phases complete —
-> sections for unbuilt phases are marked accordingly.
+> All planned application phases are implemented; the remaining caveats below
+> are environment-dependent verification items, not unbuilt features.
 
 ## 1. Problem Statement
 
@@ -40,7 +40,7 @@ Document Upload
       ↓
 Document Type Detection        (Phase 2/3)
       ↓
-Multi-Pipeline Processing      (PyMuPDF | PaddleOCR-VL-1.6 | python-docx | pandas)
+Multi-Pipeline Processing      (PyMuPDF | PaddleOCR-VL-1.6 | python-docx | table parser)
       ↓
 OCR / Structure Extraction     (Phase 3 — verified; real model weights unreachable in this sandbox)
       ↓
@@ -71,8 +71,10 @@ Evidence + Source Attribution  (Phase 6/9)
          PyMuPDF       PaddleOCR-VL      PaddleOCR-VL
 ```
 
-Routing happens at the **page level**, not just the whole-document level —
-a single PDF can mix text-based and scanned pages.
+PDF routing currently uses the document's average extracted text to choose
+the text-PDF or scanned-PDF pipeline. Mixed text/image pages are handled by
+the selected pipeline; page-level mixed-mode routing is not currently
+implemented.
 
 ## 3. Technology Stack
 
@@ -85,11 +87,11 @@ a single PDF can mix text-based and scanned pages.
 | OCR / document understanding | **PaddleOCR-VL-1.6** | ✅ Phase 3 (routing/parsing code verified; real model weights unreachable in this sandbox — see `PROJECT_STATE.md`) |
 | Image preprocessing | OpenCV | ✅ Phase 3 |
 | DOCX / XLSX / CSV | python-docx / openpyxl / table parser | ✅ Supported |
-| Vector DB | Qdrant | ⏳ Phase 4 |
-| Embeddings | Configurable (default `BAAI/bge-m3`) | ⏳ Phase 4 |
-| Reranker | Configurable (default `BAAI/bge-reranker-v2-m3`) | ⏳ Phase 5 |
-| LLM | Configurable (DeepSeek / Gemini / OpenAI via env var, raw REST) | ⚠️ Phase 6 (written, NOT run — no network this session) |
-| Containerization | Docker + docker-compose | ⏳ Phase 11 (files written, not yet run) |
+| Vector DB | Qdrant | ✅ Phase 4/5 (local mode tested; server mode needs deployment verification) |
+| Embeddings | Configurable (default `BAAI/bge-m3`) | ✅ Phase 4 (hashing fallback tested; real model weights need environment verification) |
+| Reranker | Configurable (default `BAAI/bge-reranker-v2-m3`) | ✅ Phase 5 (fallback behavior tested; real weights need environment verification) |
+| LLM | Configurable (DeepSeek / Gemini / OpenAI via env var, raw REST) | ✅ Phase 6 (clients and failure paths tested; live provider call requires credentials) |
+| Containerization | Docker + docker-compose | ✅ Phase 11/12 (configuration validated; full runtime needs a Docker daemon) |
 
 ## 4. Project Structure
 
@@ -127,13 +129,14 @@ Visit http://localhost:5173. The dev server proxies `/api` requests to
 
 ```bash
 cd backend
-pytest tests/ -q
+pytest tests/ -q --cov=app --cov-report=term-missing --cov-fail-under=70
 ```
 
-Phase 1: `5 passed`. Phase 2: `8 passed` (`tests/test_phase2_ingestion.py`).
-Phase 3: `12 passed` (`tests/test_phase3_ocr.py`, OCR model call mocked at
-the `get_ocr_pipeline()` boundary — see `PROJECT_STATE.md`). **24 passed**
-total, verified in a clean-room sandbox run on 2026-09-26.
+The current backend suite has **125 passing tests** and enforces a **70%
+minimum coverage gate** (the latest run reached approximately 90% coverage).
+OCR and external model boundaries use deterministic fakes in tests; live
+model/provider verification requires the corresponding network access,
+credentials, and model weights.
 
 ### GitHub setup
 
@@ -172,13 +175,13 @@ python -m pip install -r ../requirements-ml.txt
 See [`.env.example`](./.env.example) for the full list with comments. Never
 commit a real `.env` file — copy it and fill in secrets locally.
 
-## 7. Docker (Phase 11 — written but not yet verified end-to-end)
+## 7. Docker (Phase 11/12 — configuration validated; runtime verification required)
 
 ```bash
 docker compose up --build
 ```
 
-## 8. Demo Questions (target set — exercised once Phase 6+ is done)
+## 8. Demo Questions
 
 1. "What was the company's revenue in 2025?"
 2. "Compare revenue between 2024 and 2025."
@@ -199,7 +202,7 @@ docker compose up --build
 - Conflicting sources are surfaced side-by-side, never silently resolved.
 - Calculations (growth %, sums) are computed programmatically, not by the LLM.
 
-## 10. Limitations (current, Phase 3)
+## 10. Limitations (current)
 
 - Normal (text-layer) PDFs are ingested and chunked (Phase 2) — verified.
 - Scanned PDFs and images are routed through PaddleOCR-VL-1.6, producing
@@ -211,9 +214,11 @@ docker compose up --build
   with open network access.
 - `.xlsx` and `.csv` uploads are extracted as searchable table chunks.
   `.docx` uploads are extracted with `python-docx`, including paragraphs and tables.
-- No chat/retrieval/LLM functionality yet.
-- Docker Compose stack is written but hasn't been run end-to-end in this
-  environment (no Docker daemon available in the build sandbox).
+- Chat, retrieval, citation validation, confidence scoring, conflict detection,
+  and conversation follow-up handling are implemented and covered by tests.
+- The Docker Compose configuration is validated with `docker compose config`,
+  but the full stack has not been run in this environment because no Docker
+  daemon is available.
 
 ## 11. Roadmap
 
